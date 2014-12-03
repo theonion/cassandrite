@@ -15,4 +15,4 @@ class Event(models.Model):
         return '<Event {} />'.format(str(self))
 
     def get_interval(self):
-        return self.ceiling - self.floor
+        return self.floor, self.ceiling
