@@ -14,8 +14,10 @@ class Configuration(object):
         self.retention_rules = [rule.strip() for rule in retention_rules.split(',')]
         self.aggregation_method = aggregation_method
 
-    def get_primary_rule(self):
-        return self.retention_rules[0]
+    def __str__(self):
+        data = {'rule_name': self.rule_name, 'path': self.path, 'regex': self.regex,
+                'retention_rules': self.retention_rules, 'aggregation_method': self.aggregation_method}
+        return str(data)
 
 
 class ConfigurationStore(object):

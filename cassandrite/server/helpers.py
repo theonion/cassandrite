@@ -52,3 +52,33 @@ def get_ceiling(floor, rule):
         return floor + datetime.timedelta(days=offset)
     else:
         return None
+
+
+def get_ttl(ceiling, rule):
+    # extract rule information
+    interval = rule.split(':')[1]
+    offset = int(interval[:-1])
+
+    # copy ceiling
+    c = datetime.datetime(ceiling.year, ceiling.month, ceiling.day, ceiling.hour, ceiling.minute, ceiling.second)
+
+    # set ttl -- in seconds per cassandra docs
+    if interval.endswith('s'):
+        exp = c + datetime.timedelta(seconds=offset)
+    elif interval.endswith('m'):
+        exp = c + datetime.timedelta(minutes=offset)
+    elif interval.endswith('h'):
+        exp = c + datetime.timedelta(hours=offset)
+    elif interval.endswith('d'):
+        exp = c + datetime.timedelta(days=offset)
+    elif interval.endswith('y'):
+        exp = datetime.datetime(c.year + offset, c.month, c.day, c.hour, c.minute, c.second)
+    else:
+        return None
+
+    # get current time
+    now = datetime.datetime.now()
+
+    # get diff
+    diff = exp - now
+    return int(diff.total_seconds())

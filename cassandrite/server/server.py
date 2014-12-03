@@ -24,5 +24,5 @@ cluster = Cluster()
 session = cluster.connect('oniontv')
 
 # run server
-endpoints.serverFromString(reactor, 'tcp:8080').listen(server.Site(EventResource()))
+endpoints.serverFromString(reactor, 'tcp:8080').listen(server.Site(EventResource(session)))
 reactor.run()

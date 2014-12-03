@@ -6,12 +6,17 @@ from twisted.web import resource
 
 # local
 from configurations import config_store
-from helpers import get_floor, get_ceiling, datetime_to_unix
+from helpers import get_floor, get_ceiling, get_ttl, datetime_to_unix
 from models import Event
 
 
 class EventResource(resource.Resource):
     isLeaf = True
+
+    def __init__(self, session):
+        self.session = session
+        self.prepped_query = session.prepare(
+            'SELECT * FROM event WHERE path=? AND ceiling=? AND floor=? LIMIT 1 ALLOW FILTERING;')
 
     def render_GET(self, request):
         events = Event.objects.all()
@@ -32,6 +37,10 @@ class EventResource(resource.Resource):
         return json.dumps(response)
 
     def render_POST(self, request):
+        # set response headers
+        request.setHeader('content-type', 'application/json')
+        request.setResponseCode(400)
+
         # parse payload
         payload = json.loads(request.content.getvalue())
         path = payload.get('path')
@@ -62,49 +71,49 @@ class EventResource(resource.Resource):
 
         # bounce here if errors
         if len(errors):
-            request.setResponseCode(400)
-            request.setHeader('content-type', 'application/json')
             return json.dumps(errors)
 
-        # get matching paths
-        events = Event.objects.filter(path=path)
-        if len(events):
-            # get greatest floor
-            event = sorted(events, key=lambda e: e.floor, reverse=True)[0]
-        else:
-            event = Event(path=path)
+        # get config
+        config = config_store.get(path)
 
-        # check floor/ceiling of event
-        if (event.ceiling > time >= event.floor) is False:
-            # create new event
-            event = Event(path=path, data=data)
+        # check config
+        if not config:
+            errors['config'] = ['no config found matching given path']
+            return json.dumps(errors)
 
-            # determine floor/ceiling from configs
-            config = config_store.get(path)
-            if not config:
-                errors['config'] = ['no rules found for given path']
-                request.setResponseCode(400)
-                request.setHeader('content-type', 'application/json')
-                return json.dumps(errors)
-            rule = config.get_primary_rule()
+        # get rules
+        for rule in config.retention_rules:
+            # get floor and ceiling for payload
             floor = get_floor(time, rule)
             ceiling = get_ceiling(floor, rule)
+            ttl = get_ttl(ceiling, rule)
 
-            # set times and data
-            event.time = datetime_to_unix(floor)
-            event.floor = datetime_to_unix(floor)
-            event.ceiling = datetime_to_unix(ceiling)
-            event.data = data
+            # format times
+            floor = datetime_to_unix(floor)
+            ceiling = datetime_to_unix(ceiling)
 
-            # save
-            event.save()
+            # get matching event
+            events = Event.objects.filter(path=path)
+            events = filter(lambda e: e.floor == floor and e.ceiling == ceiling, [e for e in events])
 
-        else:
-            # update event
-            event.data += data
-            event.update()
+            if len(events):
+                event = events[0]
+                event.data += data
+                try:
+                    event.update()
+                except Exception, e:
+                    errors['update procedure'] = [str(e)]
+                    return json.dumps(errors)
 
-        # return
+            else:
+                # create new
+                event = Event.create(path=path, time=floor, ceiling=ceiling, floor=floor, data=data)
+                try:
+                    event.ttl(ttl).save()
+                except Exception, e:
+                    errors['save procedure'] = [str(e)]
+                    return json.dumps(errors)
+
+        # override response code and return
         request.setResponseCode(204)
-        request.setHeader('content-type', 'application/json')
         return ''
