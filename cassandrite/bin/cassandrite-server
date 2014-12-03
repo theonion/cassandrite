@@ -4,4 +4,4 @@
 RUNTIME=$1
 
 # runserver
-$RUNTIME cassandrite/server/server.py
+$RUNTIME server/server.py
