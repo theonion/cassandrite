@@ -87,6 +87,7 @@ class EventResource(resource.Resource):
             floor = get_floor(time, rule)
             ceiling = get_ceiling(floor, rule)
             ttl = get_ttl(ceiling, rule)
+            print('floor={} ceiling={} ttl={}'.format(floor, ceiling, ttl))
 
             # format times
             floor = datetime_to_unix(floor)
@@ -107,7 +108,7 @@ class EventResource(resource.Resource):
 
             else:
                 # create new
-                event = Event.create(path=path, time=floor, ceiling=ceiling, floor=floor, data=data)
+                event = Event.create(path=path, time=ceiling, ceiling=ceiling, floor=floor, data=data)
                 try:
                     event.ttl(ttl).save()
                 except Exception, e:
